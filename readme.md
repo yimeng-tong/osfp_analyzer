@@ -116,13 +116,6 @@ python app.py
 - 确保PASS和FAIL样本都有足够数量
 - 检查数据质量和完整性
 
-## 📈 示例数据
-
-运行`python sample_data_format.py`可生成示例数据文件，包含：
-- 100个样本的完整生产数据
-- 符合800g OSFP光模块特点的参数
-- 可直接用于测试系统功能
-
 ## 🛠️ 高级设置
 
 ### 配置文件 (config.json)
