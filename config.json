@@ -1,0 +1,49 @@
+{
+  "app": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug": false,
+    "max_content_length": 104857600
+  },
+  "openai": {
+    "api_key": "",
+    "api_url": "https://api2.aigcbest.top/v1/chat/completions",
+    "model": "gpt-4o-mini",
+    "temperature": 0.7,
+    "max_tokens": 2000
+  },
+  "analysis": {
+    "correlation_threshold": 0.5,
+    "t_test_alpha": 0.05,
+    "random_forest_n_estimators": 100,
+    "test_size": 0.3,
+    "random_state": 42
+  },
+  "system_prompt": "你是一名专业的QA和QC主管，专门负责800g OSFP光模块的生产质量分析。\n请基于提供的生产数据进行根本原因分析(RCA)，重点关注：\n1. 贴片工艺的参数异常\n2. 引线键合的工艺稳定性\n3. lens耦合的光学对准精度\n4. 各工序间的关联性分析\n5. 结合光模块工作原理分析失效机制\n\n请提供详细的分析报告，包含具体的改进建议。",
+  "column_mapping": {
+    "sn_columns": [
+      "sn",
+      "SN",
+      "序列号",
+      "serial_number"
+    ],
+    "pcba_sn_columns": [
+      "pcba_sn",
+      "PCBA_SN",
+      "pcba序列号"
+    ],
+    "shell_sn_columns": [
+      "shell_sn",
+      "SHELL_SN",
+      "壳体sn",
+      "shell序列号"
+    ],
+    "test_result_columns": [
+      "test_result",
+      "TEST_RESULT",
+      "测试结果",
+      "result",
+      "RESULT"
+    ]
+  }
+}

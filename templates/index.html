@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>800g OSFP光模块生产数据分析工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            border-left: 4px solid #3498db;
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+        }
+
+        .section h2::before {
+            content: '';
+            width: 20px;
+            height: 20px;
+            background: #3498db;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            background: #ecf0f1;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            background: #d5dbdb;
+            border-color: #2980b9;
+        }
+
+        .upload-area.dragover {
+            background: #d5f4fd;
+            border-color: #16a085;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s ease;
+            margin: 10px;
+        }
+
+        .upload-btn:hover {
+            background: #2980b9;
+        }
+
+        .file-list {
+            margin-top: 10px;
+            text-align: left;
+        }
+
+        .file-item {
+            background: white;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .config-panel {
+            background: #2c3e50;
+            color: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 30px;
+        }
+
+        .config-row {
+            margin-bottom: 15px;
+        }
+
+        .config-row label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .config-row input, .config-row textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .config-row textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        .action-buttons {
+            text-align: center;
+            padding: 30px 0;
+        }
+
+        .btn {
+            background: #27ae60;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            margin: 0 10px;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn.secondary {
+            background: #e74c3c;
+        }
+
+        .btn.secondary:hover {
+            background: #c0392b;
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #27ae60;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .analysis-report {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #ddd;
+        }
+
+        .chart-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .chart-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>800g OSFP光模块生产数据分析工具</h1>
+            <p>AI驱动的根本原因分析(RCA)系统</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 配置面板 -->
+            <div class="config-panel">
+                <h2 style="color: white;">配置设置</h2>
+                <div class="config-row">
+                    <label for="api-key">OpenAI API Key:</label>
+                    <input type="password" id="api-key" placeholder="请输入您的OpenAI API密钥">
+                </div>
+                <div class="config-row">
+                    <label for="api-url">API URL:</label>
+                    <input type="text" id="api-url" value="https://api.openai.com/v1/chat/completions" placeholder="API地址">
+                    <select onchange="setApiPreset(this.value)" style="margin-top: 5px; width: 100%; padding: 5px;">
+                        <option value="">选择预设API配置...</option>
+                        <option value="openai">OpenAI官方</option>
+                        <option value="aigcbest">AI工厂(aigcbest.top)</option>
+                        <option value="chatanywhere">ChatAnyWhere</option>
+                        <option value="api2d">API2D</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="config-row">
+                    <label for="model">模型:</label>
+                    <input type="text" id="model" value="gpt-4" placeholder="AI模型名称">
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                        常用模型: gpt-4, gpt-4o, gpt-4o-mini, gpt-3.5-turbo
+                    </small>
+                </div>
+                <div class="config-row">
+                    <label for="system-prompt">系统提示词:</label>
+                    <textarea id="system-prompt" placeholder="自定义分析提示词">你是一名专业的QA和QC主管，专门负责800g OSFP光模块的生产质量分析。
+请基于提供的生产数据进行根本原因分析(RCA)，重点关注：
+1. 贴片工艺的参数异常
+2. 引线键合的工艺稳定性
+3. lens耦合的光学对准精度
+4. 各工序间的关联性分析
+5. 结合光模块工作原理分析失效机制
+
+请提供详细的分析报告，包含具体的改进建议。</textarea>
+                </div>
+                <button class="upload-btn" onclick="updateConfig()">保存配置</button>
+                <button class="upload-btn" onclick="testAIConnection()" style="background: #f39c12;">测试AI连接</button>
+            </div>
+
+            <!-- 文件上传区域 -->
+            <div class="section">
+                <h2>贴片数据上传</h2>
+                <div class="upload-area" onclick="document.getElementById('smt-files').click()">
+                    <p>点击或拖拽上传贴片工艺数据文件 (Excel)</p>
+                    <button class="upload-btn">选择文件</button>
+                    <input type="file" id="smt-files" class="file-input" multiple accept=".xlsx,.xls">
+                </div>
+                <div id="smt-file-list" class="file-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>引线键合数据上传</h2>
+                <div class="upload-area" onclick="document.getElementById('wire-bonding-files').click()">
+                    <p>点击或拖拽上传引线键合工艺数据文件 (Excel)</p>
+                    <button class="upload-btn">选择文件</button>
+                    <input type="file" id="wire-bonding-files" class="file-input" multiple accept=".xlsx,.xls">
+                </div>
+                <div id="wire-bonding-file-list" class="file-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>Lens耦合数据上传</h2>
+                <div class="upload-area" onclick="document.getElementById('lens-coupling-files').click()">
+                    <p>点击或拖拽上传Lens耦合工艺数据文件 (Excel)</p>
+                    <button class="upload-btn">选择文件</button>
+                    <input type="file" id="lens-coupling-files" class="file-input" multiple accept=".xlsx,.xls">
+                </div>
+                <div id="lens-coupling-file-list" class="file-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>SN映射关系上传</h2>
+                <div class="upload-area" onclick="document.getElementById('sn-mapping-files').click()">
+                    <p>点击或拖拽上传PCBA SN与壳体SN映射关系文件 (Excel)</p>
+                    <button class="upload-btn">选择文件</button>
+                    <input type="file" id="sn-mapping-files" class="file-input" multiple accept=".xlsx,.xls">
+                </div>
+                <div id="sn-mapping-file-list" class="file-list"></div>
+            </div>
+
+            <div class="section">
+                <h2>测试结果数据上传</h2>
+                <div class="upload-area" onclick="document.getElementById('test-results-files').click()">
+                    <p>点击或拖拽上传测试结果数据文件 (Excel)</p>
+                    <button class="upload-btn">选择文件</button>
+                    <input type="file" id="test-results-files" class="file-input" multiple accept=".xlsx,.xls">
+                </div>
+                <div id="test-results-file-list" class="file-list"></div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+                <button class="btn" id="upload-btn" onclick="uploadFiles()">上传并分析数据</button>
+                <button class="btn secondary" id="ai-analyze-btn" onclick="analyzeWithAI()" disabled>AI深度分析</button>
+            </div>
+
+            <!-- 进度条 -->
+            <div class="progress-bar" id="progress-bar" style="display: none;">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+
+            <!-- 日志显示区域 -->
+            <div id="log-container" class="section" style="display: none;">
+                <h2>处理日志
+                    <button class="upload-btn" onclick="clearLogs()" style="float: right; margin: 0; padding: 8px 15px; font-size: 12px;">清除日志</button>
+                </h2>
+                <div id="log-content" style="background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;"></div>
+            </div>
+
+            <!-- 加载状态 -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在处理数据，请稍候...</p>
+            </div>
+
+            <!-- 结果显示区域 -->
+            <div id="results" class="results" style="display: none;">
+                <h2>分析结果</h2>
+                <div id="alert-container"></div>
+                <div id="analysis-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedFiles = {
+            'smt': [],
+            'wire_bonding': [],
+            'lens_coupling': [],
+            'sn_mapping': [],
+            'test_results': []
+        };
+
+        // 文件上传处理
+        function setupFileUpload(inputId, listId, section) {
+            const input = document.getElementById(inputId);
+            const listDiv = document.getElementById(listId);
+
+            input.addEventListener('change', function(e) {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    if (!uploadedFiles[section].some(f => f.name === file.name)) {
+                        uploadedFiles[section].push(file);
+                        addFileToList(file, listDiv, section);
+                    }
+                });
+            });
+        }
+
+        function addFileToList(file, listDiv, section) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <span>${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                <button onclick="removeFile('${file.name}', '${section}', this)" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">删除</button>
+            `;
+            listDiv.appendChild(fileItem);
+        }
+
+        function removeFile(fileName, section, button) {
+            uploadedFiles[section] = uploadedFiles[section].filter(f => f.name !== fileName);
+            button.parentElement.remove();
+        }
+
+        // 初始化文件上传
+        setupFileUpload('smt-files', 'smt-file-list', 'smt');
+        setupFileUpload('wire-bonding-files', 'wire-bonding-file-list', 'wire_bonding');
+        setupFileUpload('lens-coupling-files', 'lens-coupling-file-list', 'lens_coupling');
+        setupFileUpload('sn-mapping-files', 'sn-mapping-file-list', 'sn_mapping');
+        setupFileUpload('test-results-files', 'test-results-file-list', 'test_results');
+
+        // 拖拽上传
+        document.querySelectorAll('.upload-area').forEach(area => {
+            area.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('dragover');
+            });
+
+            area.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+            });
+
+            area.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files);
+                const input = this.querySelector('input[type="file"]');
+                if (input) {
+                    // 模拟文件选择事件
+                    const event = new Event('change');
+                    Object.defineProperty(event, 'target', {
+                        value: { files: files },
+                        writable: false
+                    });
+                    input.dispatchEvent(event);
+                }
+            });
+        });
+
+        // 更新配置
+        function updateConfig() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            const apiUrl = document.getElementById('api-url').value.trim();
+            const model = document.getElementById('model').value.trim();
+            const systemPrompt = document.getElementById('system-prompt').value.trim();
+
+            // 基本校验
+            if (!apiKey) {
+                showAlert('请输入OpenAI API Key', 'error');
+                return;
+            }
+
+            if (!apiUrl) {
+                showAlert('请输入API URL', 'error');
+                return;
+            }
+
+            if (!model) {
+                showAlert('请输入模型名称', 'error');
+                return;
+            }
+
+            // 显示确认对话框
+            if (!confirm('确定要保存配置吗？')) {
+                return;
+            }
+
+            const config = {
+                openai_api_key: apiKey,
+                openai_api_url: apiUrl,
+                model: model,
+                system_prompt: systemPrompt
+            };
+
+            addLogMessage('正在保存配置...');
+
+            fetch('/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogMessage('配置保存成功');
+                    showAlert('配置已保存', 'success');
+                    
+                    // 测试API key有效性
+                    testApiKey(apiKey, apiUrl, model);
+                } else {
+                    addLogMessage('配置保存失败: ' + data.error);
+                    showAlert('配置保存失败: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                addLogMessage('配置保存出错: ' + error.message);
+                showAlert('配置保存出错: ' + error.message, 'error');
+            });
+        }
+
+        // 测试API Key有效性
+        function testApiKey(apiKey, apiUrl, model) {
+            addLogMessage('正在测试API Key有效性...');
+            
+            fetch('/test_api_key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    api_key: apiKey,
+                    api_url: apiUrl,
+                    model: model
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addLogMessage('API Key测试成功！');
+                    showAlert('API Key测试成功，可以使用AI分析功能', 'success');
+                } else {
+                    addLogMessage('API Key测试失败: ' + data.error);
+                    showAlert('API Key测试失败: ' + data.error + '。请检查配置。', 'error');
+                }
+            })
+            .catch(error => {
+                addLogMessage('API Key测试出错: ' + error.message);
+                showAlert('API Key测试出错: ' + error.message, 'error');
+            });
+        }
+
+        // 加载已保存的配置
+        function loadConfig() {
+            fetch('/config', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const config = data.config;
+                    if (config.openai && config.openai.api_key) {
+                        document.getElementById('api-key').value = config.openai.api_key;
+                    }
+                    if (config.openai && config.openai.api_url) {
+                        document.getElementById('api-url').value = config.openai.api_url;
+                    }
+                    if (config.openai && config.openai.model) {
+                        document.getElementById('model').value = config.openai.model;
+                    }
+                    if (config.system_prompt) {
+                        document.getElementById('system-prompt').value = config.system_prompt;
+                    }
+                    addLogMessage('配置加载成功');
+                }
+            })
+            .catch(error => {
+                addLogMessage('配置加载失败: ' + error.message);
+            });
+        }
+
+        // 添加日志消息
+        function addLogMessage(message) {
+            const logContainer = document.getElementById('log-container');
+            const logContent = document.getElementById('log-content');
+            
+            // 显示日志容器
+            logContainer.style.display = 'block';
+            
+            // 添加时间戳
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            
+            logContent.textContent += logEntry;
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+
+        // 清除日志
+        function clearLogs() {
+            document.getElementById('log-content').textContent = '';
+            document.getElementById('log-container').style.display = 'none';
+        }
+
+        // 测试AI连接
+        function testAIConnection() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            const apiUrl = document.getElementById('api-url').value.trim();
+            const model = document.getElementById('model').value.trim();
+
+            if (!apiKey) {
+                showAlert('请先输入API Key', 'error');
+                return;
+            }
+
+            addLogMessage('开始测试AI连接...');
+            
+            // 创建测试数据
+            const testData = {
+                custom_prompt: "你是一个测试助手，请简单回复'测试成功'。"
+            };
+
+            // 手动创建一个假的分析器结果用于测试
+            if (!window.testAnalysisResults) {
+                window.testAnalysisResults = {
+                    data_summary: {
+                        total_samples: 10,
+                        total_columns: 5,
+                        numeric_columns: 3,
+                        target_column: 'test_result',
+                        missing_data_percent: 0
+                    },
+                    correlation_results: null,
+                    t_test_results: {},
+                    random_forest_results: null
+                };
+            }
+
+            // 临时设置分析结果用于测试
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testData)
+            })
+            .then(response => {
+                addLogMessage('收到AI测试响应: ' + response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('AI测试响应数据:', data);
+                if (data.success) {
+                    if (data.ai_analysis && !data.ai_analysis.includes('网络请求失败') && !data.ai_analysis.includes('API错误') && !data.ai_analysis.includes('第三方API返回')) {
+                        addLogMessage('AI连接测试成功！');
+                        showAlert('AI连接测试成功', 'success');
+                        
+                        // 显示成功的测试结果
+                        const testSection = `
+                            <div class="analysis-report" style="border: 2px solid #27ae60;">
+                                <h3>AI连接测试结果</h3>
+                                <div style="background: #d5f4fd; padding: 10px; border-radius: 5px;">
+                                    <strong>测试状态:</strong> 成功<br>
+                                    <strong>AI响应:</strong> ${data.ai_analysis}<br>
+                                    <strong>响应长度:</strong> ${data.ai_analysis.length} 字符
+                                </div>
+                            </div>
+                        `;
+                        
+                        const contentDiv = document.getElementById('analysis-content');
+                        contentDiv.innerHTML = testSection + contentDiv.innerHTML;
+                        document.getElementById('results').style.display = 'block';
+                    } else {
+                        addLogMessage('AI连接测试失败，API响应异常');
+                        showAlert('第三方API配置问题', 'error');
+                        
+                        // 显示调试信息
+                        const debugSection = `
+                            <div class="analysis-report" style="border: 2px solid #e74c3c;">
+                                <h3>第三方API调试信息</h3>
+                                <div style="background: #f8d7da; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px;">
+                                    <strong>问题描述:</strong> ${data.ai_analysis}<br><br>
+                                    <strong>可能的解决方案:</strong><br>
+                                    1. 检查API URL是否正确（当前: ${document.getElementById('api-url').value}）<br>
+                                    2. 确认API Key是否有效且有余额<br>
+                                    3. 检查模型名称是否被第三方API支持（当前: ${document.getElementById('model').value}）<br>
+                                    4. 联系第三方API提供商确认服务状态<br><br>
+                                    <strong>常见第三方API端点格式:</strong><br>
+                                    - https://your-api-domain.com/v1/chat/completions<br>
+                                    - https://your-api-domain.com/api/v1/chat/completions<br><br>
+                                    <strong>建议:</strong> 查看后端日志获取更详细的错误信息
+                                </div>
+                            </div>
+                        `;
+                        
+                        const contentDiv = document.getElementById('analysis-content');
+                        contentDiv.innerHTML = debugSection + contentDiv.innerHTML;
+                        document.getElementById('results').style.display = 'block';
+                    }
+                } else {
+                    addLogMessage('AI连接测试失败: ' + (data.error || '未知错误'));
+                    showAlert('AI连接测试失败', 'error');
+                }
+            })
+            .catch(error => {
+                addLogMessage('AI连接测试出错: ' + error.message);
+                showAlert('AI连接测试出错: ' + error.message, 'error');
+            });
+        }
+
+        // 上传文件
+        function uploadFiles() {
+            const formData = new FormData();
+            let hasFiles = false;
+
+            // 检查文件重复上传到不同版块
+            const allFileNames = new Set();
+            const duplicateFiles = [];
+            
+            for (const [section, files] of Object.entries(uploadedFiles)) {
+                files.forEach(file => {
+                    if (allFileNames.has(file.name)) {
+                        duplicateFiles.push(file.name);
+                    } else {
+                        allFileNames.add(file.name);
+                    }
+                });
+            }
+
+            if (duplicateFiles.length > 0) {
+                showAlert(`检测到重复文件上传到不同版块: ${duplicateFiles.join(', ')}。请确认每个文件只上传到正确的版块。`, 'error');
+                return;
+            }
+
+            // 检查是否有文件上传
+            for (const [section, files] of Object.entries(uploadedFiles)) {
+                if (files.length > 0) {
+                    hasFiles = true;
+                    files.forEach(file => {
+                        formData.append(`${section}_files`, file);
+                    });
+                }
+            }
+
+            if (!hasFiles) {
+                showAlert('请至少上传一个文件', 'error');
+                return;
+            }
+
+            showLoading(true);
+            updateProgress(10);
+            addLogMessage('开始上传文件...');
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                updateProgress(50);
+                addLogMessage('文件上传完成，开始数据分析...');
+                return response.json();
+            })
+            .then(data => {
+                updateProgress(100);
+                setTimeout(() => {
+                showLoading(false);
+                }, 500);
+                
+                if (data.success) {
+                    addLogMessage('数据分析完成！');
+                    showAlert('文件上传和初步分析完成', 'success');
+                    displayAnalysisResults(data.analysis_results);
+                    document.getElementById('ai-analyze-btn').disabled = false;
+                } else {
+                    addLogMessage('分析失败: ' + data.error);
+                    showAlert('上传失败: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                updateProgress(0);
+                showLoading(false);
+                addLogMessage('上传出错: ' + error.message);
+                showAlert('上传出错: ' + error.message, 'error');
+            });
+        }
+
+        // AI分析
+        function analyzeWithAI() {
+            const customPrompt = document.getElementById('system-prompt').value;
+            
+            showLoading(true);
+            updateProgress(20);
+            addLogMessage('开始AI深度分析...');
+
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    custom_prompt: customPrompt
+                })
+            })
+            .then(response => {
+                updateProgress(80);
+                addLogMessage('AI分析进行中...');
+                return response.json();
+            })
+            .then(data => {
+                updateProgress(100);
+                setTimeout(() => {
+                showLoading(false);
+                }, 500);
+                
+                console.log('=== AI分析响应处理开始 ===');
+                console.log('完整响应数据:', data);
+                console.log('响应成功状态:', data.success);
+                console.log('AI分析字段存在:', 'ai_analysis' in data);
+                console.log('AI分析内容:', data.ai_analysis);
+                
+                addLogMessage('收到AI分析响应，success: ' + data.success);
+                
+                if (data.success) {
+                    addLogMessage('AI分析完成！');
+                    if (data.ai_analysis) {
+                        addLogMessage('AI分析内容长度: ' + data.ai_analysis.length);
+                        console.log('准备调用displayAIAnalysis函数...');
+                        
+                        try {
+                    showAlert('AI分析完成', 'success');
+                    displayAIAnalysis(data.ai_analysis);
+                            console.log('displayAIAnalysis函数调用成功');
+                        } catch (error) {
+                            console.error('displayAIAnalysis函数执行出错:', error);
+                            addLogMessage('显示AI分析结果时出错: ' + error.message);
+                            showAlert('显示AI分析结果时出错: ' + error.message, 'error');
+                        }
+                    } else {
+                        addLogMessage('AI分析响应为空');
+                        console.log('AI分析字段为空或不存在');
+                        showAlert('AI分析返回空结果', 'error');
+                    }
+                    
+                    if (data.analysis_results) {
+                        console.log('同时更新基础分析结果...');
+                        displayAnalysisResults(data.analysis_results);
+                    }
+                } else {
+                    addLogMessage('AI分析失败: ' + (data.error || '未知错误'));
+                    showAlert('AI分析失败: ' + (data.error || '未知错误'), 'error');
+                }
+                
+                console.log('=== AI分析响应处理结束 ===');
+            })
+            .catch(error => {
+                updateProgress(0);
+                showLoading(false);
+                addLogMessage('AI分析出错: ' + error.message);
+                showAlert('AI分析出错: ' + error.message, 'error');
+            });
+        }
+
+        // 显示分析结果
+        function displayAnalysisResults(results) {
+            const resultsDiv = document.getElementById('results');
+            const contentDiv = document.getElementById('analysis-content');
+            
+            let html = '<div class="analysis-report">';
+            
+            // 数据摘要
+            if (results.data_summary) {
+                html += `
+                    <h3>数据摘要</h3>
+                    <p>总样本数: ${results.data_summary.total_samples}</p>
+                    <p>数据列数: ${results.data_summary.columns ? results.data_summary.columns.length : 0}</p>
+                `;
+            }
+            
+            // 相关性分析图
+            if (results.correlation_plot) {
+                html += `
+                    <div class="chart-container">
+                        <h3>相关性分析</h3>
+                        <img src="/download/correlation_matrix.png" alt="相关性矩阵">
+                    </div>
+                `;
+            }
+            
+            // T检验结果
+            if (results.t_test_results && Object.keys(results.t_test_results).length > 0) {
+                html += '<h3>T检验分析结果</h3><ul>';
+                for (const [param, result] of Object.entries(results.t_test_results)) {
+                    const significant = result.significant ? '显著' : '不显著';
+                    html += `<li>${param}: p值=${result.p_value.toFixed(4)} (${significant})</li>`;
+                }
+                html += '</ul>';
+            }
+            
+            // 随机森林分析
+            if (results.random_forest_results && results.rf_plot) {
+                html += `
+                    <div class="chart-container">
+                        <h3>随机森林特征重要性分析</h3>
+                        <img src="/download/random_forest_importance.png" alt="特征重要性">
+                        <p>模型准确率: ${(results.random_forest_results.model_score * 100).toFixed(2)}%</p>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            contentDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+        }
+
+        // 显示AI分析结果
+        function displayAIAnalysis(analysis) {
+            console.log('=== AI分析显示开始 ===');
+            console.log('原始分析内容:', analysis);
+            console.log('分析内容类型:', typeof analysis);
+            console.log('分析内容长度:', analysis ? analysis.length : 0);
+            
+            addLogMessage('开始显示AI分析结果，长度: ' + (analysis ? analysis.length : 0));
+            
+            const contentDiv = document.getElementById('analysis-content');
+            const resultsDiv = document.getElementById('results');
+            
+            console.log('contentDiv存在:', !!contentDiv);
+            console.log('resultsDiv存在:', !!resultsDiv);
+            
+            if (!analysis || analysis.trim() === '') {
+                console.log('AI分析内容为空');
+                addLogMessage('AI分析内容为空，无法显示');
+                const errorSection = `
+                <div class="analysis-report">
+                    <h3>AI深度分析报告</h3>
+                        <div style="color: #e74c3c; padding: 15px; border: 1px solid #e74c3c; border-radius: 5px;">
+                            AI分析返回空结果，请检查API配置或重试。
+                        </div>
+                </div>
+            `;
+                contentDiv.innerHTML = errorSection + contentDiv.innerHTML;
+                resultsDiv.style.display = 'block';
+                return;
+            }
+            
+            console.log('开始处理Markdown格式...');
+            // 处理Markdown格式的内容，将###转换为HTML标题
+            console.log('原始分析内容前500字符:', analysis.substring(0, 500));
+            
+            let processedAnalysis = analysis
+                .replace(/### (.*?)$/gm, '<h4 style="color: #34495e; margin-top: 15px; margin-bottom: 8px;">$1</h4>')
+                .replace(/## (.*?)$/gm, '<h3 style="color: #2c3e50; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">$1</h3>')
+                .replace(/# (.*?)$/gm, '<h2 style="color: #2c3e50; margin-top: 25px; margin-bottom: 15px; border-bottom: 3px solid #3498db; padding-bottom: 8px;">$1</h2>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #2980b9;">$1</strong>')
+                .replace(/^- (.*?)$/gm, '<li style="margin: 5px 0; list-style-type: disc;">$1</li>')
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+            
+            // 包装连续的列表项为ul
+            processedAnalysis = processedAnalysis.replace(/(<li[^>]*>.*?<\/li><br>)*<li[^>]*>.*?<\/li>/g, '<ul style="margin: 10px 0; padding-left: 20px;">$&</ul>');
+            
+            console.log('处理后的分析内容前500字符:', processedAnalysis.substring(0, 500));
+            
+            // 包装在div中
+            processedAnalysis = '<div style="margin: 10px 0;">' + processedAnalysis + '</div>';
+            
+            const aiSection = `
+                <div class="analysis-report" id="ai-analysis-section" style="
+                    margin: 20px 0 30px 0;
+                    border: 5px solid #27ae60;
+                    box-shadow: 0 8px 16px rgba(39, 174, 96, 0.3);
+                    background: white;
+                    border-radius: 12px;
+                    position: relative;
+                    z-index: 1000;
+                ">
+                    <div style="
+                        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+                        color: white;
+                        margin: 0;
+                        padding: 20px;
+                        border-radius: 8px 8px 0 0;
+                        font-size: 20px;
+                        font-weight: bold;
+                        text-align: center;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    ">
+                        🚀 AI深度分析报告已生成 🚀
+                        <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
+                            分析内容: ${analysis.length} 字符 | 生成时间: ${new Date().toLocaleTimeString()}
+                        </div>
+                    </div>
+                    <div style="
+                        padding: 25px;
+                        background: #fafafa;
+                        border-radius: 0 0 8px 8px;
+                        line-height: 1.8;
+                        font-size: 15px;
+                    ">
+                        <div style="
+                            background: linear-gradient(135deg, #e8f5e8 0%, #d5f4d5 100%);
+                            padding: 15px;
+                            margin-bottom: 20px;
+                            border-radius: 8px;
+                            border-left: 6px solid #27ae60;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                        ">
+                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                <span style="font-size: 24px; margin-right: 10px;">✅</span>
+                                <strong style="color: #27ae60; font-size: 16px;">AI分析已成功完成</strong>
+                            </div>
+                            📊 <strong>分析内容长度:</strong> ${analysis.length} 字符<br>
+                            ⏰ <strong>完成时间:</strong> ${new Date().toLocaleString()}<br>
+                            🔍 <strong>提示:</strong> 如需下载完整内容，请在浏览器控制台运行: <code style="background: #fff; padding: 2px 4px; border-radius: 3px; color: #e74c3c;">window.downloadAIAnalysis()</code>
+                        </div>
+                        <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                            ${processedAnalysis}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            console.log('准备插入AI分析内容...');
+            console.log('当前contentDiv innerHTML长度:', contentDiv.innerHTML.length);
+            
+            // 将AI分析放在最顶部
+            const oldContent = contentDiv.innerHTML;
+            contentDiv.innerHTML = aiSection + oldContent;
+            
+            // 立即添加页面顶部通知条
+            const notificationBar = document.createElement('div');
+            notificationBar.id = 'ai-notification-bar';
+            notificationBar.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+                color: white;
+                padding: 15px;
+                text-align: center;
+                font-size: 16px;
+                font-weight: bold;
+                z-index: 10000;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                animation: slideDown 0.5s ease-out;
+            `;
+            notificationBar.innerHTML = `
+                🎉 AI分析报告已生成完成！点击按钮查看详细分析结果 🎉
+                <button onclick="document.getElementById('ai-analysis-section')?.scrollIntoView({behavior: 'smooth', block: 'start'}) || document.getElementById('results')?.scrollIntoView({behavior: 'smooth', block: 'start'})" style="
+                    background: rgba(255,255,255,0.9);
+                    border: none;
+                    color: #27ae60;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    margin: 0 10px;
+                    font-weight: bold;
+                    transition: all 0.3s ease;
+                " onmouseover="this.style.background='white'" onmouseout="this.style.background='rgba(255,255,255,0.9)'">📍 跳转到AI分析报告</button>
+                <button onclick="this.parentElement.remove()" style="
+                    float: right;
+                    background: rgba(255,255,255,0.2);
+                    border: none;
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    margin-left: 15px;
+                ">✕</button>
+            `;
+            
+            // 添加滑动动画
+            if (!document.getElementById('notification-animation')) {
+                const style = document.createElement('style');
+                style.id = 'notification-animation';
+                style.textContent = `
+                    @keyframes slideDown {
+                        from { transform: translateY(-100%); }
+                        to { transform: translateY(0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            document.body.insertBefore(notificationBar, document.body.firstChild);
+            
+            // 5秒后自动移除通知条
+            setTimeout(() => {
+                if (notificationBar && notificationBar.parentElement) {
+                    notificationBar.style.animation = 'slideDown 0.5s ease-out reverse';
+                    setTimeout(() => notificationBar.remove(), 500);
+                }
+            }, 5000);
+            
+            console.log('插入后contentDiv innerHTML长度:', contentDiv.innerHTML.length);
+            console.log('AI分析section是否存在:', !!document.getElementById('ai-analysis-section'));
+            
+            // 额外调试：检查是否真的插入了内容
+            const insertedSection = document.getElementById('ai-analysis-section');
+            if (insertedSection) {
+                console.log('AI分析section高度:', insertedSection.offsetHeight);
+                console.log('AI分析section是否可见:', insertedSection.offsetHeight > 0 && insertedSection.style.display !== 'none');
+                console.log('AI分析section位置:', insertedSection.getBoundingClientRect());
+            } else {
+                console.error('AI分析section未找到！');
+                // 尝试直接插入简单的测试内容
+                const testDiv = document.createElement('div');
+                testDiv.id = 'test-ai-section';
+                testDiv.style.cssText = 'background: red; color: white; padding: 20px; margin: 10px 0; border: 3px solid black;';
+                testDiv.innerHTML = `<h2>测试AI内容插入</h2><p>AI内容长度: ${analysis.length}</p><p>时间: ${new Date().toLocaleTimeString()}</p>`;
+                contentDiv.insertBefore(testDiv, contentDiv.firstChild);
+                console.log('插入了测试内容');
+            }
+            
+            // 确保结果区域可见
+            resultsDiv.style.display = 'block';
+            
+            // 多种方式尝试滚动到AI分析结果
+            setTimeout(() => {
+                // 方法1：通过ID查找
+                let aiReport = document.getElementById('ai-analysis-section');
+                console.log('方法1 - 通过ID查找AI报告，元素存在:', !!aiReport);
+                
+                // 方法2：通过类名查找
+                if (!aiReport) {
+                    const sections = document.querySelectorAll('.analysis-report');
+                    aiReport = Array.from(sections).find(section => 
+                        section.innerHTML.includes('AI深度分析报告')
+                    );
+                    console.log('方法2 - 通过类名查找AI报告，元素存在:', !!aiReport);
+                }
+                
+                // 方法3：查找最新插入的内容
+                if (!aiReport) {
+                    const contentDiv = document.getElementById('analysis-content');
+                    aiReport = contentDiv.firstElementChild;
+                    console.log('方法3 - 查找第一个子元素，元素存在:', !!aiReport);
+                }
+                
+                if (aiReport) {
+                    console.log('找到AI报告元素，开始滚动...');
+                    console.log('元素位置:', aiReport.getBoundingClientRect());
+                    aiReport.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    console.log('滚动完成');
+                    
+                    // 添加闪烁效果突出显示
+                    aiReport.style.animation = 'highlight 2s ease-in-out';
+                    aiReport.style.setProperty('--highlight-color', '#27ae60');
+                } else {
+                    // 备用滚动方案：滚动到结果区域顶部
+                    console.log('AI报告元素未找到，尝试滚动到结果区域');
+                    const resultsDiv = document.getElementById('results');
+                    if (resultsDiv) {
+                        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        console.log('滚动到结果区域完成');
+                    }
+                }
+            }, 500);  // 增加延迟时间确保DOM更新完成
+            
+            // 添加CSS动画
+            if (!document.getElementById('highlight-animation')) {
+                const style = document.createElement('style');
+                style.id = 'highlight-animation';
+                style.textContent = `
+                    @keyframes highlight {
+                        0%, 100% { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                        50% { box-shadow: 0 8px 24px rgba(39, 174, 96, 0.4); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // 保存AI分析内容到前端本地存储（用于调试）
+            try {
+                const debugData = {
+                    timestamp: new Date().toISOString(),
+                    original_length: analysis ? analysis.length : 0,
+                    processed_length: processedAnalysis ? processedAnalysis.length : 0,
+                    original_content: analysis,
+                    processed_content: processedAnalysis,
+                    insertion_successful: !!document.getElementById('ai-analysis-section')
+                };
+                localStorage.setItem('ai_analysis_debug', JSON.stringify(debugData, null, 2));
+                console.log('AI分析调试数据已保存到localStorage');
+                
+                // 在浏览器控制台提供提取函数
+                window.downloadAIAnalysis = function() {
+                    const blob = new Blob([analysis], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'ai_analysis_' + new Date().toISOString().replace(/[:.]/g, '-') + '.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                };
+                
+                console.log('可以使用 window.downloadAIAnalysis() 下载原始AI分析内容');
+                
+                // 添加手动滚动到AI分析的函数
+                window.scrollToAIAnalysis = function() {
+                    const aiSection = document.getElementById('ai-analysis-section');
+                    if (aiSection) {
+                        aiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        console.log('已滚动到AI分析报告');
+                        return true;
+                    } else {
+                        console.log('未找到AI分析section');
+                        return false;
+                    }
+                };
+                
+                console.log('🔍 调试命令:');
+                console.log('- 下载AI分析: window.downloadAIAnalysis()');
+                console.log('- 滚动到AI分析: window.scrollToAIAnalysis()');
+                console.log('- 查看调试数据: JSON.parse(localStorage.getItem("ai_analysis_debug"))');
+            } catch (e) {
+                console.error('保存调试数据失败:', e);
+            }
+            
+            addLogMessage('AI分析结果显示完成，已滚动到结果位置');
+            console.log('=== AI分析显示结束 ===');
+            
+            // 添加最终确认提示
+            setTimeout(() => {
+                if (document.getElementById('ai-analysis-section')) {
+                    console.log('✅ 确认：AI分析内容已成功显示在页面上');
+                    console.log('📍 位置：在"分析结果"区域的最顶部，绿色边框的报告');
+                    console.log('🎯 如果看不到，请向下滚动或使用 window.scrollToAIAnalysis() 命令');
+                } else {
+                    console.error('❌ 警告：AI分析section未找到，可能存在显示问题');
+                }
+            }, 100);
+        }
+
+        // 工具函数
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('progress-bar').style.display = show ? 'block' : 'none';
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progress-fill').style.width = percent + '%';
+        }
+
+        function showAlert(message, type) {
+            const alertContainer = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            alertContainer.innerHTML = '';
+            alertContainer.appendChild(alert);
+            
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // 设置API预设配置
+        function setApiPreset(preset) {
+            const apiUrlInput = document.getElementById('api-url');
+            const modelInput = document.getElementById('model');
+            
+            switch(preset) {
+                case 'openai':
+                    apiUrlInput.value = 'https://api.openai.com/v1/chat/completions';
+                    modelInput.value = 'gpt-4';
+                    addLogMessage('已设置OpenAI官方API配置');
+                    break;
+                case 'aigcbest':
+                    apiUrlInput.value = 'https://api2.aigcbest.top/v1/chat/completions';
+                    modelInput.value = 'gpt-4o-mini';
+                    addLogMessage('已设置AI工厂API配置');
+                    break;
+                case 'chatanywhere':
+                    apiUrlInput.value = 'https://api.chatanywhere.com.cn/v1/chat/completions';
+                    modelInput.value = 'gpt-3.5-turbo';
+                    addLogMessage('已设置ChatAnyWhere API配置');
+                    break;
+                case 'api2d':
+                    apiUrlInput.value = 'https://openai.api2d.net/v1/chat/completions';
+                    modelInput.value = 'gpt-3.5-turbo';
+                    addLogMessage('已设置API2D配置');
+                    break;
+                case 'custom':
+                    addLogMessage('请手动输入自定义API配置');
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            addLogMessage('页面加载完成');
+            loadConfig();
+        });
+    </script>
+</body>
+</html>
