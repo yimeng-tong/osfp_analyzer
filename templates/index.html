@@ -309,9 +309,29 @@
                 </div>
                 <div class="config-row">
                     <label for="model">模型:</label>
-                    <input type="text" id="model" value="gpt-4" placeholder="AI模型名称">
+                    <select id="model" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="o3">O3 (第三方)</option>
+                        <option value="claude-3-opus">Claude 3 Opus</option>
+                        <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                    </select>
+                    <button onclick="fetchAvailableModels()" style="margin-top: 5px; padding: 5px 10px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer;">获取可用模型</button>
+                </div>
+                <div class="config-row">
+                    <label for="max-tokens">最大Token数:</label>
+                    <input type="number" id="max-tokens" value="10000" min="100" max="100000" placeholder="最大输出Token数">
                     <small style="color: #7f8c8d; display: block; margin-top: 5px;">
-                        常用模型: gpt-4, gpt-4o, gpt-4o-mini, gpt-3.5-turbo
+                        建议范围: 1000-50000，数值越大输出越详细但消耗更多Token
+                    </small>
+                </div>
+                <div class="config-row">
+                    <label for="temperature">温度参数:</label>
+                    <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1" placeholder="创造性参数">
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                        0.0=确定性输出, 1.0=创造性输出, 建议: 0.3-0.8
                     </small>
                 </div>
                 <div class="config-row">
@@ -385,6 +405,7 @@
             <div class="action-buttons">
                 <button class="btn" id="upload-btn" onclick="uploadFiles()">上传并分析数据</button>
                 <button class="btn secondary" id="ai-analyze-btn" onclick="analyzeWithAI()" disabled>AI深度分析</button>
+                <button class="btn secondary" id="ai-stream-btn" onclick="analyzeWithAIStream()" disabled>AI流式分析</button>
             </div>
 
             <!-- 进度条 -->
@@ -396,8 +417,10 @@
             <div id="log-container" class="section" style="display: none;">
                 <h2>处理日志
                     <button class="upload-btn" onclick="clearLogs()" style="float: right; margin: 0; padding: 8px 15px; font-size: 12px;">清除日志</button>
+                    <button class="upload-btn" onclick="refreshLogs()" style="float: right; margin: 0; padding: 8px 15px; font-size: 12px; margin-right: 10px; background: #3498db;">刷新日志</button>
+                    <button class="upload-btn" onclick="toggleAutoRefresh()" id="auto-refresh-btn" style="float: right; margin: 0; padding: 8px 15px; font-size: 12px; margin-right: 10px; background: #27ae60;">自动刷新</button>
                 </h2>
-                <div id="log-content" style="background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;"></div>
+                <div id="log-content" style="background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; max-height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4;"></div>
             </div>
 
             <!-- 加载状态 -->
@@ -406,9 +429,35 @@
                 <p>正在处理数据，请稍候...</p>
             </div>
 
+            <!-- AI分析报告专区 -->
+            <div id="ai-analysis-section" class="section" style="display: none; border-left: 4px solid #e74c3c;">
+                <h2>🤖 AI深度分析报告</h2>
+                <div id="ai-analysis-status" class="alert success" style="display: none;">
+                    <strong>AI分析状态：</strong><span id="ai-status-text">等待开始分析...</span>
+                </div>
+                <div id="ai-analysis-content" style="
+                    background: white; 
+                    border-radius: 8px; 
+                    padding: 20px; 
+                    margin-top: 15px;
+                    border: 2px dashed #ddd;
+                    text-align: center;
+                    color: #7f8c8d;
+                    min-height: 120px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-direction: column;
+                ">
+                    <div style="font-size: 48px; margin-bottom: 15px;">🤔</div>
+                    <div style="font-size: 16px; margin-bottom: 10px;">AI分析报告将在这里显示</div>
+                    <div style="font-size: 14px; color: #95a5a6;">请先上传数据文件，然后点击"AI深度分析"按钮</div>
+                </div>
+            </div>
+
             <!-- 结果显示区域 -->
             <div id="results" class="results" style="display: none;">
-                <h2>分析结果</h2>
+                <h2>📊 基础数据分析结果</h2>
                 <div id="alert-container"></div>
                 <div id="analysis-content"></div>
             </div>
@@ -496,6 +545,8 @@
             const apiKey = document.getElementById('api-key').value.trim();
             const apiUrl = document.getElementById('api-url').value.trim();
             const model = document.getElementById('model').value.trim();
+            const maxTokens = document.getElementById('max-tokens').value.trim();
+            const temperature = document.getElementById('temperature').value.trim();
             const systemPrompt = document.getElementById('system-prompt').value.trim();
 
             // 基本校验
@@ -510,7 +561,17 @@
             }
 
             if (!model) {
-                showAlert('请输入模型名称', 'error');
+                showAlert('请选择模型', 'error');
+                return;
+            }
+
+            if (!maxTokens || maxTokens < 100 || maxTokens > 100000) {
+                showAlert('请输入有效的最大Token数 (100-100000)', 'error');
+                return;
+            }
+
+            if (!temperature || temperature < 0 || temperature > 2) {
+                showAlert('请输入有效的温度参数 (0-2)', 'error');
                 return;
             }
 
@@ -523,6 +584,8 @@
                 openai_api_key: apiKey,
                 openai_api_url: apiUrl,
                 model: model,
+                max_tokens: parseInt(maxTokens),
+                temperature: parseFloat(temperature),
                 system_prompt: systemPrompt
             };
 
@@ -603,6 +666,12 @@
                     if (config.openai && config.openai.model) {
                         document.getElementById('model').value = config.openai.model;
                     }
+                    if (config.openai && config.openai.max_tokens) {
+                        document.getElementById('max-tokens').value = config.openai.max_tokens;
+                    }
+                    if (config.openai && config.openai.temperature) {
+                        document.getElementById('temperature').value = config.openai.temperature;
+                    }
                     if (config.system_prompt) {
                         document.getElementById('system-prompt').value = config.system_prompt;
                     }
@@ -635,6 +704,72 @@
             document.getElementById('log-content').textContent = '';
             document.getElementById('log-container').style.display = 'none';
         }
+
+        // 实时日志相关变量
+        let autoRefreshInterval = null;
+        let isAutoRefreshEnabled = false;
+
+        // 刷新日志
+        function refreshLogs() {
+            addLogMessage('正在刷新后端日志...');
+            fetch('/logs')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const logContent = document.getElementById('log-content');
+                        if (data.logs && data.logs.trim()) {
+                            logContent.textContent = data.logs;
+                            logContent.scrollTop = logContent.scrollHeight;
+                            addLogMessage('后端日志刷新成功');
+                        } else {
+                            addLogMessage('后端暂无日志记录');
+                        }
+                    } else {
+                        addLogMessage('获取后端日志失败: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    addLogMessage('刷新日志时出错: ' + error.message);
+                });
+        }
+
+        // 切换自动刷新
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('auto-refresh-btn');
+            if (isAutoRefreshEnabled) {
+                // 停止自动刷新
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                isAutoRefreshEnabled = false;
+                btn.textContent = '自动刷新';
+                btn.style.background = '#27ae60';
+                addLogMessage('已停止自动刷新日志');
+            } else {
+                // 开始自动刷新
+                isAutoRefreshEnabled = true;
+                btn.textContent = '停止刷新';
+                btn.style.background = '#e74c3c';
+                addLogMessage('已开启自动刷新日志 (每3秒)');
+                
+                // 立即刷新一次
+                refreshLogs();
+                
+                // 设置定时刷新
+                autoRefreshInterval = setInterval(refreshLogs, 3000);
+            }
+        }
+
+        // 页面加载时显示日志容器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 显示日志容器
+            document.getElementById('log-container').style.display = 'block';
+            addLogMessage('页面加载完成，开始监控后端日志...');
+            
+            // 初始加载日志
+            refreshLogs();
+        });
 
         // 测试AI连接
         function testAIConnection() {
@@ -784,6 +919,9 @@
             showLoading(true);
             updateProgress(10);
             addLogMessage('开始上传文件...');
+            
+            // 显示日志容器
+            document.getElementById('log-container').style.display = 'block';
 
             fetch('/upload', {
                 method: 'POST',
@@ -804,7 +942,24 @@
                     addLogMessage('数据分析完成！');
                     showAlert('文件上传和初步分析完成', 'success');
                     displayAnalysisResults(data.analysis_results);
+                    
+                    // 显示AI分析专区并更新状态
+                    const aiSection = document.getElementById('ai-analysis-section');
+                    const aiStatus = document.getElementById('ai-analysis-status');
+                    const aiStatusText = document.getElementById('ai-status-text');
+                    
+                    aiSection.style.display = 'block';
+                    aiStatus.style.display = 'block';
+                    aiStatusText.textContent = '数据已上传，可以开始AI分析';
+                    aiStatus.className = 'alert success';
+                    
                     document.getElementById('ai-analyze-btn').disabled = false;
+                document.getElementById('ai-stream-btn').disabled = false;
+                    
+                    // 滚动到AI分析区域
+                    setTimeout(() => {
+                        aiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 500);
                 } else {
                     addLogMessage('分析失败: ' + data.error);
                     showAlert('上传失败: ' + data.error, 'error');
@@ -822,9 +977,31 @@
         function analyzeWithAI() {
             const customPrompt = document.getElementById('system-prompt').value;
             
+            // 更新AI分析区域状态
+            const aiStatus = document.getElementById('ai-analysis-status');
+            const aiStatusText = document.getElementById('ai-status-text');
+            const aiContent = document.getElementById('ai-analysis-content');
+            
+            aiStatus.style.display = 'block';
+            aiStatus.className = 'alert';
+            aiStatus.style.background = '#fff3cd';
+            aiStatus.style.color = '#856404';
+            aiStatusText.textContent = 'AI分析进行中，请稍候...';
+            
+            // 更新AI内容区域显示加载状态
+            aiContent.innerHTML = `
+                <div style="font-size: 48px; margin-bottom: 15px;">🤖</div>
+                <div style="font-size: 16px; margin-bottom: 10px; color: #f39c12;">AI正在分析数据中...</div>
+                <div class="spinner" style="margin: 20px auto;"></div>
+                <div style="font-size: 14px; color: #95a5a6;">请耐心等待，通常需要20-60秒</div>
+            `;
+            
             showLoading(true);
             updateProgress(20);
             addLogMessage('开始AI深度分析...');
+            
+            // 显示日志容器
+            document.getElementById('log-container').style.display = 'block';
 
             fetch('/analyze', {
                 method: 'POST',
@@ -858,30 +1035,21 @@
                     addLogMessage('AI分析完成！');
                     if (data.ai_analysis) {
                         addLogMessage('AI分析内容长度: ' + data.ai_analysis.length);
-                        console.log('准备调用displayAIAnalysis函数...');
-                        
-                        try {
-                    showAlert('AI分析完成', 'success');
-                    displayAIAnalysis(data.ai_analysis);
-                            console.log('displayAIAnalysis函数调用成功');
-                        } catch (error) {
-                            console.error('displayAIAnalysis函数执行出错:', error);
-                            addLogMessage('显示AI分析结果时出错: ' + error.message);
-                            showAlert('显示AI分析结果时出错: ' + error.message, 'error');
-                        }
+                        showAlert('AI分析完成', 'success');
+                        displayAIAnalysis(data.ai_analysis);
                     } else {
                         addLogMessage('AI分析响应为空');
-                        console.log('AI分析字段为空或不存在');
-                        showAlert('AI分析返回空结果', 'error');
+                        displayAIAnalysisError('AI分析返回空结果，请检查API配置或重试');
                     }
                     
                     if (data.analysis_results) {
-                        console.log('同时更新基础分析结果...');
                         displayAnalysisResults(data.analysis_results);
                     }
                 } else {
-                    addLogMessage('AI分析失败: ' + (data.error || '未知错误'));
-                    showAlert('AI分析失败: ' + (data.error || '未知错误'), 'error');
+                    const errorMessage = data.error || '未知错误';
+                    addLogMessage('AI分析失败: ' + errorMessage);
+                    showAlert('AI分析失败: ' + errorMessage, 'error');
+                    displayAIAnalysisError('AI分析失败: ' + errorMessage);
                 }
                 
                 console.log('=== AI分析响应处理结束 ===');
@@ -891,6 +1059,124 @@
                 showLoading(false);
                 addLogMessage('AI分析出错: ' + error.message);
                 showAlert('AI分析出错: ' + error.message, 'error');
+                displayAIAnalysisError('网络或服务器错误: ' + error.message);
+            });
+        }
+
+        // AI流式分析
+        function analyzeWithAIStream() {
+            const customPrompt = document.getElementById('system-prompt').value;
+            
+            // 更新AI分析区域状态
+            const aiStatus = document.getElementById('ai-analysis-status');
+            const aiStatusText = document.getElementById('ai-status-text');
+            const aiContent = document.getElementById('ai-analysis-content');
+            
+            aiStatus.style.display = 'block';
+            aiStatus.className = 'alert';
+            aiStatus.style.background = '#fff3cd';
+            aiStatus.style.color = '#856404';
+            aiStatusText.textContent = 'AI流式分析进行中，请稍候...';
+            
+            // 更新AI内容区域显示流式加载状态
+            aiContent.innerHTML = `
+                <div style="font-size: 48px; margin-bottom: 15px;">🤖</div>
+                <div style="font-size: 16px; margin-bottom: 10px; color: #f39c12;">AI正在流式分析数据中...</div>
+                <div class="spinner" style="margin: 20px auto;"></div>
+                <div style="font-size: 14px; color: #95a5a6;">内容将实时显示，请耐心等待</div>
+                <div id="stream-content" style="margin-top: 20px; text-align: left; white-space: pre-wrap; font-family: 'Courier New', monospace; background: #f8f9fa; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; border: 1px solid #ddd;"></div>
+            `;
+            
+            showLoading(true);
+            updateProgress(20);
+            addLogMessage('开始AI流式分析...');
+            
+            // 显示日志容器
+            document.getElementById('log-container').style.display = 'block';
+
+            // 使用POST请求进行流式分析
+            fetch('/analyze_stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    custom_prompt: customPrompt
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullContent = "";
+                const streamContent = document.getElementById('stream-content');
+                
+                function readStream() {
+                    return reader.read().then(({ done, value }) => {
+                        if (done) {
+                            // 流式读取完成
+                            updateProgress(100);
+                            setTimeout(() => {
+                                showLoading(false);
+                            }, 500);
+                            
+                            // 更新状态
+                            aiStatus.style.background = '#d4edda';
+                            aiStatus.style.color = '#155724';
+                            aiStatusText.textContent = 'AI流式分析完成';
+                            
+                            // 更新内容区域显示完整结果
+                            aiContent.innerHTML = `
+                                <div style="background: white; border-radius: 8px; padding: 20px; margin-top: 15px; border: 2px solid #27ae60;">
+                                    <div style="font-size: 16px; margin-bottom: 15px; color: #27ae60; font-weight: bold;">✅ AI流式分析报告</div>
+                                    <div style="white-space: pre-wrap; font-family: 'Microsoft YaHei', Arial, sans-serif; line-height: 1.6; color: #2c3e50;">${fullContent}</div>
+                                </div>
+                            `;
+                            
+                            addLogMessage('AI流式分析完成');
+                            showAlert('AI流式分析完成', 'success');
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    
+                                    if (data.type === 'content') {
+                                        fullContent += data.content;
+                                        if (streamContent) {
+                                            streamContent.textContent = fullContent;
+                                            streamContent.scrollTop = streamContent.scrollHeight;
+                                        }
+                                        updateProgress(20 + (fullContent.length / 1000) * 60); // 根据内容长度更新进度
+                                    } else if (data.type === 'error') {
+                                        throw new Error(data.content);
+                                    }
+                                } catch (error) {
+                                    console.error('解析流式数据出错:', error);
+                                }
+                            }
+                        }
+                        
+                        return readStream();
+                    });
+                }
+                
+                return readStream();
+            })
+            .catch(error => {
+                updateProgress(0);
+                showLoading(false);
+                addLogMessage('AI流式分析出错: ' + error.message);
+                showAlert('AI流式分析出错: ' + error.message, 'error');
+                displayAIAnalysisError('流式分析错误: ' + error.message);
             });
         }
 
@@ -906,8 +1192,83 @@
                 html += `
                     <h3>数据摘要</h3>
                     <p>总样本数: ${results.data_summary.total_samples}</p>
-                    <p>数据列数: ${results.data_summary.columns ? results.data_summary.columns.length : 0}</p>
+                    <p>数据列数: ${results.data_summary.total_columns || 0}</p>
+                    <p>数值列数: ${results.data_summary.numeric_columns || 0}</p>
+                    <p>目标列: ${results.data_summary.target_column || '未知'}</p>
                 `;
+            }
+            
+            // 描述性统计分析
+            if (results.descriptive_statistics && Object.keys(results.descriptive_statistics).length > 0) {
+                html += '<h3>📊 描述性统计分析</h3>';
+                
+                // 统计有明显差异的参数
+                const obviousDiffParams = [];
+                const mediumDiffParams = [];
+                const smallDiffParams = [];
+                
+                for (const [param, result] of Object.entries(results.descriptive_statistics)) {
+                    const diffLevel = result.differences.difference_level;
+                    const interpretation = result.interpretation;
+                    
+                    if (diffLevel === 'large') {
+                        obviousDiffParams.push({
+                            param: param,
+                            mean_diff: result.differences.mean_diff,
+                            pass_higher: interpretation.pass_mean_higher
+                        });
+                    } else if (diffLevel === 'medium') {
+                        mediumDiffParams.push({
+                            param: param,
+                            mean_diff: result.differences.mean_diff,
+                            pass_higher: interpretation.pass_mean_higher
+                        });
+                    } else if (diffLevel === 'small') {
+                        smallDiffParams.push({
+                            param: param,
+                            mean_diff: result.differences.mean_diff,
+                            pass_higher: interpretation.pass_mean_higher
+                        });
+                    }
+                }
+                
+                html += '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0;">';
+                html += `<p><strong>分析参数总数:</strong> ${Object.keys(results.descriptive_statistics).length}</p>`;
+                
+                if (obviousDiffParams.length > 0) {
+                    html += `<p style="color: #e74c3c;"><strong>🔴 存在大差异的参数 (${obviousDiffParams.length}个):</strong></p><ul>`;
+                    obviousDiffParams.forEach(item => {
+                        const direction = item.pass_higher ? 'PASS组更高' : 'FAIL组更高';
+                        html += `<li>${item.param} (差值: ${item.mean_diff.toFixed(3)}, ${direction})</li>`;
+                    });
+                    html += '</ul>';
+                }
+                
+                if (mediumDiffParams.length > 0) {
+                    html += `<p style="color: #f39c12;"><strong>🟡 存在中等差异的参数 (${mediumDiffParams.length}个):</strong></p><ul>`;
+                    mediumDiffParams.forEach(item => {
+                        const direction = item.pass_higher ? 'PASS组更高' : 'FAIL组更高';
+                        html += `<li>${item.param} (差值: ${item.mean_diff.toFixed(3)}, ${direction})</li>`;
+                    });
+                    html += '</ul>';
+                }
+                
+                if (smallDiffParams.length > 0) {
+                    html += `<p style="color: #3498db;"><strong>🔵 存在小差异的参数 (${smallDiffParams.length}个):</strong></p>`;
+                    html += `<details><summary>点击查看详情</summary><ul>`;
+                    smallDiffParams.forEach(item => {
+                        const direction = item.pass_higher ? 'PASS组更高' : 'FAIL组更高';
+                        html += `<li>${item.param} (差值: ${item.mean_diff.toFixed(3)}, ${direction})</li>`;
+                    });
+                    html += '</ul></details>';
+                }
+                
+                const totalWithDifferences = obviousDiffParams.length + mediumDiffParams.length + smallDiffParams.length;
+                html += `<p><strong>初步判断:</strong> ${totalWithDifferences > 0 ? 
+                    `在${Object.keys(results.descriptive_statistics).length}个参数中，有${totalWithDifferences}个参数在Pass/Fail组之间存在差异` : 
+                    '未发现明显的参数差异'}</p>`;
+                
+                html += '</div>';
             }
             
             // 相关性分析图
@@ -946,41 +1307,26 @@
             resultsDiv.style.display = 'block';
         }
 
-        // 显示AI分析结果
+        // 显示AI分析结果 - 新的专属区域版本
         function displayAIAnalysis(analysis) {
-            console.log('=== AI分析显示开始 ===');
-            console.log('原始分析内容:', analysis);
-            console.log('分析内容类型:', typeof analysis);
-            console.log('分析内容长度:', analysis ? analysis.length : 0);
-            
+            console.log('=== AI分析显示开始（新版本）===');
             addLogMessage('开始显示AI分析结果，长度: ' + (analysis ? analysis.length : 0));
             
-            const contentDiv = document.getElementById('analysis-content');
-            const resultsDiv = document.getElementById('results');
-            
-            console.log('contentDiv存在:', !!contentDiv);
-            console.log('resultsDiv存在:', !!resultsDiv);
+            const aiStatus = document.getElementById('ai-analysis-status');
+            const aiStatusText = document.getElementById('ai-status-text');
+            const aiContent = document.getElementById('ai-analysis-content');
             
             if (!analysis || analysis.trim() === '') {
-                console.log('AI分析内容为空');
-                addLogMessage('AI分析内容为空，无法显示');
-                const errorSection = `
-                <div class="analysis-report">
-                    <h3>AI深度分析报告</h3>
-                        <div style="color: #e74c3c; padding: 15px; border: 1px solid #e74c3c; border-radius: 5px;">
-                            AI分析返回空结果，请检查API配置或重试。
-                        </div>
-                </div>
-            `;
-                contentDiv.innerHTML = errorSection + contentDiv.innerHTML;
-                resultsDiv.style.display = 'block';
+                displayAIAnalysisError('AI分析返回空结果，请检查API配置或重试');
                 return;
             }
             
-            console.log('开始处理Markdown格式...');
-            // 处理Markdown格式的内容，将###转换为HTML标题
-            console.log('原始分析内容前500字符:', analysis.substring(0, 500));
+            // 更新状态为成功
+            aiStatus.style.display = 'block';
+            aiStatus.className = 'alert success';
+            aiStatusText.innerHTML = `AI分析完成！内容长度: ${analysis.length} 字符 | 完成时间: ${new Date().toLocaleTimeString()}`;
             
+            // 处理Markdown格式
             let processedAnalysis = analysis
                 .replace(/### (.*?)$/gm, '<h4 style="color: #34495e; margin-top: 15px; margin-bottom: 8px;">$1</h4>')
                 .replace(/## (.*?)$/gm, '<h3 style="color: #2c3e50; margin-top: 20px; margin-bottom: 10px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">$1</h3>')
@@ -993,75 +1339,112 @@
             // 包装连续的列表项为ul
             processedAnalysis = processedAnalysis.replace(/(<li[^>]*>.*?<\/li><br>)*<li[^>]*>.*?<\/li>/g, '<ul style="margin: 10px 0; padding-left: 20px;">$&</ul>');
             
-            console.log('处理后的分析内容前500字符:', processedAnalysis.substring(0, 500));
+            // 更新AI内容区域
+            aiContent.style.textAlign = 'left';
+            aiContent.style.border = '2px solid #27ae60';
+            aiContent.style.minHeight = 'auto';
+            aiContent.style.display = 'block';
             
-            // 包装在div中
-            processedAnalysis = '<div style="margin: 10px 0;">' + processedAnalysis + '</div>';
-            
-            const aiSection = `
-                <div class="analysis-report" id="ai-analysis-section" style="
-                    margin: 20px 0 30px 0;
-                    border: 5px solid #27ae60;
-                    box-shadow: 0 8px 16px rgba(39, 174, 96, 0.3);
-                    background: white;
-                    border-radius: 12px;
-                    position: relative;
-                    z-index: 1000;
+            aiContent.innerHTML = `
+                <div style="
+                    background: linear-gradient(135deg, #e8f5e8 0%, #d5f4d5 100%);
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 8px;
+                    border-left: 6px solid #27ae60;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
                 ">
-                    <div style="
-                        background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-                        color: white;
-                        margin: 0;
-                        padding: 20px;
-                        border-radius: 8px 8px 0 0;
-                        font-size: 20px;
-                        font-weight: bold;
-                        text-align: center;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    ">
-                        🚀 AI深度分析报告已生成 🚀
-                        <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
-                            分析内容: ${analysis.length} 字符 | 生成时间: ${new Date().toLocaleTimeString()}
-                        </div>
+                    <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <span style="font-size: 24px; margin-right: 10px;">✅</span>
+                        <strong style="color: #27ae60; font-size: 16px;">AI分析已成功完成</strong>
                     </div>
-                    <div style="
-                        padding: 25px;
-                        background: #fafafa;
-                        border-radius: 0 0 8px 8px;
-                        line-height: 1.8;
-                        font-size: 15px;
-                    ">
-                        <div style="
-                            background: linear-gradient(135deg, #e8f5e8 0%, #d5f4d5 100%);
-                            padding: 15px;
-                            margin-bottom: 20px;
-                            border-radius: 8px;
-                            border-left: 6px solid #27ae60;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                        ">
-                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
-                                <span style="font-size: 24px; margin-right: 10px;">✅</span>
-                                <strong style="color: #27ae60; font-size: 16px;">AI分析已成功完成</strong>
-                            </div>
-                            📊 <strong>分析内容长度:</strong> ${analysis.length} 字符<br>
-                            ⏰ <strong>完成时间:</strong> ${new Date().toLocaleString()}<br>
-                            🔍 <strong>提示:</strong> 如需下载完整内容，请在浏览器控制台运行: <code style="background: #fff; padding: 2px 4px; border-radius: 3px; color: #e74c3c;">window.downloadAIAnalysis()</code>
-                        </div>
-                        <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
-                            ${processedAnalysis}
-                        </div>
-                    </div>
+                    📊 <strong>分析内容长度:</strong> ${analysis.length} 字符<br>
+                    ⏰ <strong>完成时间:</strong> ${new Date().toLocaleString()}<br>
+                    🔍 <strong>提示:</strong> 如需下载完整内容，请在浏览器控制台运行: <code style="background: #fff; padding: 2px 4px; border-radius: 3px; color: #e74c3c;">window.downloadAIAnalysis()</code>
+                </div>
+                <div style="
+                    background: white; 
+                    padding: 20px; 
+                    border-radius: 8px; 
+                    border: 1px solid #e0e0e0;
+                    line-height: 1.8;
+                    font-size: 15px;
+                ">
+                    ${processedAnalysis}
                 </div>
             `;
             
-            console.log('准备插入AI分析内容...');
-            console.log('当前contentDiv innerHTML长度:', contentDiv.innerHTML.length);
+            // 更新section的边框颜色表示成功
+            const aiSection = document.getElementById('ai-analysis-section');
+            aiSection.style.borderLeftColor = '#27ae60';
             
-            // 将AI分析放在最顶部
-            const oldContent = contentDiv.innerHTML;
-            contentDiv.innerHTML = aiSection + oldContent;
+            // 添加页面顶部通知条
+            showAICompletionNotification();
             
-            // 立即添加页面顶部通知条
+            // 滚动到AI分析区域
+            setTimeout(() => {
+                aiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // 添加闪烁效果突出显示
+                aiSection.style.animation = 'highlight 2s ease-in-out';
+            }, 500);
+            
+            // 保存分析内容到本地存储
+            setupAIAnalysisDebugTools(analysis, processedAnalysis);
+            
+            addLogMessage('AI分析结果显示完成，已滚动到AI专属区域');
+            console.log('=== AI分析显示结束（新版本）===');
+        }
+        
+        // 显示AI分析错误
+        function displayAIAnalysisError(errorMessage) {
+            console.log('显示AI分析错误:', errorMessage);
+            
+            const aiStatus = document.getElementById('ai-analysis-status');
+            const aiStatusText = document.getElementById('ai-status-text');
+            const aiContent = document.getElementById('ai-analysis-content');
+            
+            // 更新状态为错误
+            aiStatus.style.display = 'block';
+            aiStatus.className = 'alert error';
+            aiStatusText.textContent = 'AI分析失败';
+            
+            // 更新内容区域显示错误信息
+            aiContent.style.textAlign = 'center';
+            aiContent.style.border = '2px solid #e74c3c';
+            aiContent.innerHTML = `
+                <div style="font-size: 48px; margin-bottom: 15px;">❌</div>
+                <div style="font-size: 16px; margin-bottom: 10px; color: #e74c3c;">AI分析失败</div>
+                <div style="font-size: 14px; color: #95a5a6; margin-bottom: 20px;">${errorMessage}</div>
+                <button onclick="analyzeWithAI()" style="
+                    background: #3498db;
+                    color: white;
+                    padding: 10px 20px;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">🔄 重试AI分析</button>
+            `;
+            
+            // 更新section的边框颜色表示错误
+            const aiSection = document.getElementById('ai-analysis-section');
+            aiSection.style.borderLeftColor = '#e74c3c';
+            
+            // 滚动到AI分析区域
+            setTimeout(() => {
+                aiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 500);
+        }
+        
+        // 显示AI完成通知
+        function showAICompletionNotification() {
+            // 移除已存在的通知条
+            const existingNotification = document.getElementById('ai-notification-bar');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
             const notificationBar = document.createElement('div');
             notificationBar.id = 'ai-notification-bar';
             notificationBar.style.cssText = `
@@ -1080,8 +1463,8 @@
                 animation: slideDown 0.5s ease-out;
             `;
             notificationBar.innerHTML = `
-                🎉 AI分析报告已生成完成！点击按钮查看详细分析结果 🎉
-                <button onclick="document.getElementById('ai-analysis-section')?.scrollIntoView({behavior: 'smooth', block: 'start'}) || document.getElementById('results')?.scrollIntoView({behavior: 'smooth', block: 'start'})" style="
+                🎉 AI分析报告已生成完成！请查看下方专属分析区域 🎉
+                <button onclick="document.getElementById('ai-analysis-section').scrollIntoView({behavior: 'smooth', block: 'start'})" style="
                     background: rgba(255,255,255,0.9);
                     border: none;
                     color: #27ae60;
@@ -1091,7 +1474,7 @@
                     margin: 0 10px;
                     font-weight: bold;
                     transition: all 0.3s ease;
-                " onmouseover="this.style.background='white'" onmouseout="this.style.background='rgba(255,255,255,0.9)'">📍 跳转到AI分析报告</button>
+                " onmouseover="this.style.background='white'" onmouseout="this.style.background='rgba(255,255,255,0.9)'">📍 跳转到AI报告</button>
                 <button onclick="this.parentElement.remove()" style="
                     float: right;
                     background: rgba(255,255,255,0.2);
@@ -1113,6 +1496,10 @@
                         from { transform: translateY(-100%); }
                         to { transform: translateY(0); }
                     }
+                    @keyframes highlight {
+                        0%, 100% { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                        50% { box-shadow: 0 8px 24px rgba(39, 174, 96, 0.4); }
+                    }
                 `;
                 document.head.appendChild(style);
             }
@@ -1126,101 +1513,24 @@
                     setTimeout(() => notificationBar.remove(), 500);
                 }
             }, 5000);
-            
-            console.log('插入后contentDiv innerHTML长度:', contentDiv.innerHTML.length);
-            console.log('AI分析section是否存在:', !!document.getElementById('ai-analysis-section'));
-            
-            // 额外调试：检查是否真的插入了内容
-            const insertedSection = document.getElementById('ai-analysis-section');
-            if (insertedSection) {
-                console.log('AI分析section高度:', insertedSection.offsetHeight);
-                console.log('AI分析section是否可见:', insertedSection.offsetHeight > 0 && insertedSection.style.display !== 'none');
-                console.log('AI分析section位置:', insertedSection.getBoundingClientRect());
-            } else {
-                console.error('AI分析section未找到！');
-                // 尝试直接插入简单的测试内容
-                const testDiv = document.createElement('div');
-                testDiv.id = 'test-ai-section';
-                testDiv.style.cssText = 'background: red; color: white; padding: 20px; margin: 10px 0; border: 3px solid black;';
-                testDiv.innerHTML = `<h2>测试AI内容插入</h2><p>AI内容长度: ${analysis.length}</p><p>时间: ${new Date().toLocaleTimeString()}</p>`;
-                contentDiv.insertBefore(testDiv, contentDiv.firstChild);
-                console.log('插入了测试内容');
-            }
-            
-            // 确保结果区域可见
-            resultsDiv.style.display = 'block';
-            
-            // 多种方式尝试滚动到AI分析结果
-            setTimeout(() => {
-                // 方法1：通过ID查找
-                let aiReport = document.getElementById('ai-analysis-section');
-                console.log('方法1 - 通过ID查找AI报告，元素存在:', !!aiReport);
-                
-                // 方法2：通过类名查找
-                if (!aiReport) {
-                    const sections = document.querySelectorAll('.analysis-report');
-                    aiReport = Array.from(sections).find(section => 
-                        section.innerHTML.includes('AI深度分析报告')
-                    );
-                    console.log('方法2 - 通过类名查找AI报告，元素存在:', !!aiReport);
-                }
-                
-                // 方法3：查找最新插入的内容
-                if (!aiReport) {
-                    const contentDiv = document.getElementById('analysis-content');
-                    aiReport = contentDiv.firstElementChild;
-                    console.log('方法3 - 查找第一个子元素，元素存在:', !!aiReport);
-                }
-                
-                if (aiReport) {
-                    console.log('找到AI报告元素，开始滚动...');
-                    console.log('元素位置:', aiReport.getBoundingClientRect());
-                    aiReport.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    console.log('滚动完成');
-                    
-                    // 添加闪烁效果突出显示
-                    aiReport.style.animation = 'highlight 2s ease-in-out';
-                    aiReport.style.setProperty('--highlight-color', '#27ae60');
-                } else {
-                    // 备用滚动方案：滚动到结果区域顶部
-                    console.log('AI报告元素未找到，尝试滚动到结果区域');
-                    const resultsDiv = document.getElementById('results');
-                    if (resultsDiv) {
-                        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        console.log('滚动到结果区域完成');
-                    }
-                }
-            }, 500);  // 增加延迟时间确保DOM更新完成
-            
-            // 添加CSS动画
-            if (!document.getElementById('highlight-animation')) {
-                const style = document.createElement('style');
-                style.id = 'highlight-animation';
-                style.textContent = `
-                    @keyframes highlight {
-                        0%, 100% { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-                        50% { box-shadow: 0 8px 24px rgba(39, 174, 96, 0.4); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-            
-            // 保存AI分析内容到前端本地存储（用于调试）
+        }
+        
+        // 设置AI分析调试工具
+        function setupAIAnalysisDebugTools(originalAnalysis, processedAnalysis) {
             try {
                 const debugData = {
                     timestamp: new Date().toISOString(),
-                    original_length: analysis ? analysis.length : 0,
+                    original_length: originalAnalysis ? originalAnalysis.length : 0,
                     processed_length: processedAnalysis ? processedAnalysis.length : 0,
-                    original_content: analysis,
+                    original_content: originalAnalysis,
                     processed_content: processedAnalysis,
-                    insertion_successful: !!document.getElementById('ai-analysis-section')
+                    section_exists: !!document.getElementById('ai-analysis-section')
                 };
                 localStorage.setItem('ai_analysis_debug', JSON.stringify(debugData, null, 2));
-                console.log('AI分析调试数据已保存到localStorage');
                 
                 // 在浏览器控制台提供提取函数
                 window.downloadAIAnalysis = function() {
-                    const blob = new Blob([analysis], { type: 'text/plain;charset=utf-8' });
+                    const blob = new Blob([originalAnalysis], { type: 'text/plain;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -1231,42 +1541,22 @@
                     URL.revokeObjectURL(url);
                 };
                 
-                console.log('可以使用 window.downloadAIAnalysis() 下载原始AI分析内容');
-                
-                // 添加手动滚动到AI分析的函数
                 window.scrollToAIAnalysis = function() {
                     const aiSection = document.getElementById('ai-analysis-section');
                     if (aiSection) {
                         aiSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        console.log('已滚动到AI分析报告');
                         return true;
                     } else {
-                        console.log('未找到AI分析section');
                         return false;
                     }
                 };
                 
-                console.log('🔍 调试命令:');
-                console.log('- 下载AI分析: window.downloadAIAnalysis()');
-                console.log('- 滚动到AI分析: window.scrollToAIAnalysis()');
-                console.log('- 查看调试数据: JSON.parse(localStorage.getItem("ai_analysis_debug"))');
+                console.log('🔍 AI分析调试工具已就绪');
+                console.log('- 下载分析: window.downloadAIAnalysis()');
+                console.log('- 滚动到分析: window.scrollToAIAnalysis()');
             } catch (e) {
-                console.error('保存调试数据失败:', e);
+                console.error('设置调试工具失败:', e);
             }
-            
-            addLogMessage('AI分析结果显示完成，已滚动到结果位置');
-            console.log('=== AI分析显示结束 ===');
-            
-            // 添加最终确认提示
-            setTimeout(() => {
-                if (document.getElementById('ai-analysis-section')) {
-                    console.log('✅ 确认：AI分析内容已成功显示在页面上');
-                    console.log('📍 位置：在"分析结果"区域的最顶部，绿色边框的报告');
-                    console.log('🎯 如果看不到，请向下滚动或使用 window.scrollToAIAnalysis() 命令');
-                } else {
-                    console.error('❌ 警告：AI分析section未找到，可能存在显示问题');
-                }
-            }, 100);
         }
 
         // 工具函数
@@ -1290,6 +1580,66 @@
             setTimeout(() => {
                 alert.remove();
             }, 5000);
+        }
+
+        // 获取可用模型列表
+        function fetchAvailableModels() {
+            const apiKey = document.getElementById('api-key').value;
+            const apiUrl = document.getElementById('api-url').value;
+            
+            if (!apiKey) {
+                showAlert('请先输入API Key', 'error');
+                return;
+            }
+            
+            addLogMessage('正在获取可用模型列表...');
+            
+            fetch('/get_models', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    api_key: apiKey,
+                    api_url: apiUrl
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modelSelect = document.getElementById('model');
+                    const currentValue = modelSelect.value;
+                    
+                    // 清空现有选项
+                    modelSelect.innerHTML = '';
+                    
+                    // 添加新选项
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.id;
+                        option.textContent = model.name;
+                        modelSelect.appendChild(option);
+                    });
+                    
+                    // 尝试恢复之前的选择
+                    if (currentValue) {
+                        modelSelect.value = currentValue;
+                    }
+                    
+                    addLogMessage(`成功获取到 ${data.models.length} 个可用模型`);
+                    if (data.warning) {
+                        addLogMessage(`警告: ${data.warning}`);
+                    }
+                    showAlert(`成功获取到 ${data.models.length} 个模型`, 'success');
+                } else {
+                    addLogMessage('获取模型列表失败: ' + data.error);
+                    showAlert('获取模型列表失败: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                addLogMessage('获取模型列表出错: ' + error.message);
+                showAlert('获取模型列表出错: ' + error.message, 'error');
+            });
         }
 
         // 设置API预设配置

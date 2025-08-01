@@ -362,6 +362,116 @@ class DataAnalyzer:
             logger.error(f"相关性分析失败: {str(e)}")
             return None, None
     
+    def descriptive_statistics_analysis(self, data, target_column):
+        """描述性统计分析 - Pass/Fail两组比较"""
+        try:
+            results = {}
+            
+            if target_column not in data.columns:
+                logger.error(f"目标列 {target_column} 不存在")
+                return results
+            
+            # 检查测试结果的值分布
+            value_counts = data[target_column].value_counts()
+            logger.info(f"测试结果分布: {value_counts.to_dict()}")
+            
+            # 更灵活的PASS/FAIL识别
+            pass_values_possible = ['PASS', 'Pass', 'pass', '通过', 'OK', 'ok', '1', 1, True]
+            fail_values_possible = ['FAIL', 'Fail', 'fail', '失败', 'NG', 'ng', '0', 0, False]
+            
+            pass_mask = data[target_column].isin(pass_values_possible)
+            fail_mask = data[target_column].isin(fail_values_possible)
+            
+            pass_data = data[pass_mask]
+            fail_data = data[fail_mask]
+            
+            if len(pass_data) == 0 or len(fail_data) == 0:
+                logger.warning(f"PASS样本数: {len(pass_data)}, FAIL样本数: {len(fail_data)}")
+                return results
+            
+            logger.info(f"描述性统计分析: PASS样本{len(pass_data)}个, FAIL样本{len(fail_data)}个")
+            
+            numeric_columns = data.select_dtypes(include=[np.number]).columns
+            
+            for col in numeric_columns:
+                if col != target_column:
+                    pass_values = pass_data[col].dropna()
+                    fail_values = fail_data[col].dropna()
+                    
+                    if len(pass_values) >= 3 and len(fail_values) >= 3:  # 最小样本要求
+                        try:
+                            # 计算描述性统计量
+                            pass_stats = {
+                                'count': int(len(pass_values)),
+                                'mean': float(pass_values.mean()),
+                                'median': float(pass_values.median()),
+                                'std': float(pass_values.std()),
+                                'min': float(pass_values.min()),
+                                'max': float(pass_values.max()),
+                                'q25': float(pass_values.quantile(0.25)),
+                                'q75': float(pass_values.quantile(0.75))
+                            }
+                            
+                            fail_stats = {
+                                'count': int(len(fail_values)),
+                                'mean': float(fail_values.mean()),
+                                'median': float(fail_values.median()),
+                                'std': float(fail_values.std()),
+                                'min': float(fail_values.min()),
+                                'max': float(fail_values.max()),
+                                'q25': float(fail_values.quantile(0.25)),
+                                'q75': float(fail_values.quantile(0.75))
+                            }
+                            
+                            # 计算差异指标
+                            mean_diff = pass_stats['mean'] - fail_stats['mean']
+                            median_diff = pass_stats['median'] - fail_stats['median']
+                            std_ratio = pass_stats['std'] / fail_stats['std'] if fail_stats['std'] > 0 else float('inf')
+                            
+                            # 判断是否存在明显差异（基于均值差异和标准差）
+                            combined_std = np.sqrt((pass_stats['std']**2 + fail_stats['std']**2) / 2)
+                            normalized_mean_diff = abs(mean_diff) / combined_std if combined_std > 0 else 0
+                            
+                            # 差异程度判断
+                            if normalized_mean_diff >= 1.0:
+                                difference_level = 'large'  # 大差异
+                            elif normalized_mean_diff >= 0.5:
+                                difference_level = 'medium'  # 中等差异
+                            elif normalized_mean_diff >= 0.2:
+                                difference_level = 'small'  # 小差异
+                            else:
+                                difference_level = 'negligible'  # 可忽略差异
+                            
+                            results[col] = {
+                                'pass_stats': pass_stats,
+                                'fail_stats': fail_stats,
+                                'differences': {
+                                    'mean_diff': float(mean_diff),
+                                    'median_diff': float(median_diff),
+                                    'std_ratio': float(std_ratio),
+                                    'normalized_mean_diff': float(normalized_mean_diff),
+                                    'difference_level': difference_level
+                                },
+                                'interpretation': {
+                                    'has_obvious_difference': difference_level in ['large', 'medium'],
+                                    'pass_mean_higher': mean_diff > 0,
+                                    'pass_more_stable': std_ratio < 1.0
+                                }
+                            }
+                            
+                        except Exception as e:
+                            logger.warning(f"列 {col} 描述性统计分析失败: {str(e)}")
+                            continue
+                    else:
+                        logger.warning(f"列 {col} 样本量不足: PASS={len(pass_values)}, FAIL={len(fail_values)}")
+            
+            logger.info(f"完成描述性统计分析，共分析 {len(results)} 个参数")
+            return results
+            
+        except Exception as e:
+            logger.error(f"描述性统计分析失败: {str(e)}")
+            return {}
+            
     def t_test_analysis(self, data, target_column):
         """T检验分析"""
         try:
@@ -599,6 +709,7 @@ class DataAnalyzer:
             
             # 执行各项分析
             correlation_results, corr_plot = self.correlation_analysis(merged_data)
+            descriptive_stats = self.descriptive_statistics_analysis(merged_data, target_col)
             t_test_results = self.t_test_analysis(merged_data, target_col)
             rf_results, rf_plot = self.random_forest_analysis(merged_data, target_col)
             
@@ -615,6 +726,7 @@ class DataAnalyzer:
                     'missing_data_percent': float((merged_data.isnull().sum().sum() / (len(merged_data) * len(merged_data.columns))) * 100)
                 },
                 'data_quality': data_quality,
+                'descriptive_statistics': descriptive_stats,
                 'correlation_results': correlation_results,
                 'correlation_plot': corr_plot,
                 't_test_results': t_test_results,
@@ -759,9 +871,21 @@ def analyze_with_ai():
             logger.info(f"analyzer.analysis_results类型: {type(analyzer.analysis_results)}")
             logger.info(f"analyzer.analysis_results的键: {list(analyzer.analysis_results.keys()) if analyzer.analysis_results else '无'}")
             
+            # 获取描述性统计中有明显差异的参数
+            descriptive_stats = analyzer.analysis_results.get('descriptive_statistics', {})
+            obvious_diff_params = [
+                param for param, result in descriptive_stats.items()
+                if result.get('interpretation', {}).get('has_obvious_difference', False)
+            ]
+            
             analysis_summary = {
                 'data_summary': analyzer.analysis_results.get('data_summary', {}),
                 'data_quality': analyzer.analysis_results.get('data_quality', {}),
+                'descriptive_statistics': {
+                    'parameters_analyzed': len(descriptive_stats),
+                    'parameters_with_obvious_differences': obvious_diff_params,
+                    'total_obvious_differences': len(obvious_diff_params)
+                },
                 'correlation_analysis': {
                     'completed': analyzer.analysis_results.get('correlation_results') is not None,
                     'strong_correlations': analyzer.analysis_results.get('correlation_results', {}).get('strong_correlations', [])
@@ -792,6 +916,7 @@ def analyze_with_ai():
         logger.info(f"AI分析开始 - API Key存在: {bool(api_key)}")
         logger.info(f"API URL: {openai_config.get('api_url', 'https://api.openai.com/v1/chat/completions')}")
         logger.info(f"模型: {openai_config.get('model', 'gpt-4')}")
+        logger.info(f"Max Tokens: {openai_config.get('max_tokens', 2000)}")
         
         if not api_key:
             logger.warning("AI分析失败：API Key未配置")
@@ -879,12 +1004,33 @@ def analyze_with_ai():
             logger.info(f"请求头: {enhanced_headers}")
             logger.info(f"请求payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
             
-            response = requests.post(
+            # 优化SSL连接设置，解决SSL错误
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            # 创建自定义session来处理SSL问题
+            session = requests.Session()
+            session.verify = False  # 禁用SSL验证以解决SSL错误
+            
+            # 设置重试策略
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+            
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+            
+            response = session.post(
                 api_url,
                 headers=enhanced_headers, 
                 json=payload,
-                timeout=60,
-                verify=True  # 确保SSL验证
+                timeout=120,  # 增加超时时间
+                stream=False  # 非流式请求
             )
             
             logger.info(f"API响应状态码: {response.status_code}")
@@ -994,6 +1140,206 @@ AI分析内容是否为空: {not bool(ai_analysis)}
         logger.error(f"完整错误堆栈: {traceback.format_exc()}")
         return jsonify({'error': f'AI分析时出错: {str(e)}'}), 500
 
+@app.route('/analyze_stream', methods=['POST'])
+def analyze_with_ai_stream():
+    """AI流式分析接口"""
+    try:
+        logger.info("=== AI流式分析函数开始执行 ===")
+        data = request.json
+        logger.info(f"接收到流式分析请求数据: {data}")
+        custom_prompt = data.get('custom_prompt', config.get('system_prompt', ''))
+        logger.info(f"自定义提示词: {custom_prompt[:100]}...")
+        
+        # 检查是否有分析结果
+        if not analyzer.analysis_results:
+            return jsonify({'error': '没有可分析的数据，请先上传文件'}), 400
+        
+        # 准备发送给AI的详细数据摘要
+        logger.info("开始构建分析总结...")
+        
+        # 获取描述性统计中有明显差异的参数
+        descriptive_stats = analyzer.analysis_results.get('descriptive_statistics', {})
+        obvious_diff_params = [
+            param for param, result in descriptive_stats.items()
+            if result.get('interpretation', {}).get('has_obvious_difference', False)
+        ]
+        
+        analysis_summary = {
+            'data_summary': analyzer.analysis_results.get('data_summary', {}),
+            'data_quality': analyzer.analysis_results.get('data_quality', {}),
+            'descriptive_statistics': {
+                'parameters_analyzed': len(descriptive_stats),
+                'parameters_with_obvious_differences': obvious_diff_params,
+                'total_obvious_differences': len(obvious_diff_params)
+            },
+            'correlation_analysis': {
+                'completed': analyzer.analysis_results.get('correlation_results') is not None,
+                'strong_correlations': analyzer.analysis_results.get('correlation_results', {}).get('strong_correlations', [])
+            },
+            't_test_analysis': {
+                'parameters_analyzed': len(analyzer.analysis_results.get('t_test_results', {})),
+                'significant_parameters': [
+                    param for param, result in analyzer.analysis_results.get('t_test_results', {}).items()
+                    if result.get('significant', False)
+                ]
+            },
+            'random_forest_analysis': {
+                'completed': analyzer.analysis_results.get('random_forest_results') is not None,
+                'model_accuracy': analyzer.analysis_results.get('random_forest_results', {}).get('model_score', 0),
+                'top_features': [
+                    feature['feature'] for feature in 
+                    analyzer.analysis_results.get('random_forest_results', {}).get('feature_importance', [])[:5]
+                ]
+            }
+        }
+        logger.info("分析总结构建完成")
+        
+        # 调用OpenAI API
+        openai_config = config.get('openai', {})
+        api_key = openai_config.get('api_key', '')
+        
+        logger.info(f"AI流式分析开始 - API Key存在: {bool(api_key)}")
+        logger.info(f"API URL: {openai_config.get('api_url', 'https://api.openai.com/v1/chat/completions')}")
+        logger.info(f"模型: {openai_config.get('model', 'gpt-4')}")
+        logger.info(f"Max Tokens: {openai_config.get('max_tokens', 2000)}")
+        
+        if not api_key:
+            logger.warning("AI流式分析失败：API Key未配置")
+            return jsonify({'error': '请先配置OpenAI API密钥以使用AI分析功能。'}), 400
+        
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json'
+        }
+        
+        payload = {
+            'model': openai_config.get('model', 'gpt-4'),
+            'temperature': openai_config.get('temperature', 0.7),
+            'max_tokens': openai_config.get('max_tokens', 2000),
+            'stream': True,  # 启用流式输出
+            'messages': [
+                {'role': 'system', 'content': custom_prompt},
+                {'role': 'user', 'content': f'请基于以下800g OSFP光模块生产数据分析结果进行专业的RCA根本原因分析：\n\n{json.dumps(analysis_summary, ensure_ascii=False, indent=2)}\n\n请提供详细的分析报告，包含具体的改进建议和预防措施。'}
+            ]
+        }
+        
+        logger.info("开始调用OpenAI流式API...")
+        logger.info(f"Payload大小: {len(json.dumps(payload, ensure_ascii=False))}")
+        
+        try:
+            base_url = openai_config.get('api_url', 'https://api.openai.com/v1/chat/completions')
+            
+            # 确保第三方API有正确的端点
+            if not base_url.endswith('/chat/completions') and not base_url.endswith('/v1/chat/completions'):
+                if base_url.endswith('/'):
+                    api_url = base_url + 'v1/chat/completions'
+                else:
+                    api_url = base_url + '/v1/chat/completions'
+            else:
+                api_url = base_url
+                
+            logger.info(f"正在请求流式API: {api_url}")
+            
+            # 为第三方API添加额外的请求头
+            enhanced_headers = headers.copy()
+            enhanced_headers.update({
+                'User-Agent': 'OSFP-Analyzer/1.0',
+                'Accept': 'text/event-stream',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Cache-Control': 'no-cache'
+            })
+            
+            logger.info(f"流式请求头: {enhanced_headers}")
+            
+            # 优化SSL连接设置，解决SSL错误
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            
+            # 创建自定义session来处理SSL问题
+            session = requests.Session()
+            session.verify = False
+            
+            # 设置重试策略
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+            
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+            
+            def generate():
+                """生成器函数，用于流式返回AI分析结果"""
+                try:
+                    response = session.post(
+                        api_url,
+                        headers=enhanced_headers, 
+                        json=payload,
+                        timeout=300,  # 增加超时时间到5分钟
+                        stream=True  # 启用流式请求
+                    )
+                    
+                    logger.info(f"流式API响应状态码: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        full_content = ""
+                        for line in response.iter_lines():
+                            if line:
+                                line = line.decode('utf-8')
+                                if line.startswith('data: '):
+                                    data = line[6:]  # 移除 'data: ' 前缀
+                                    if data == '[DONE]':
+                                        logger.info("流式响应完成")
+                                        yield f"data: {json.dumps({'type': 'done', 'content': full_content}, ensure_ascii=False)}\n\n"
+                                        break
+                                    else:
+                                        try:
+                                            json_data = json.loads(data)
+                                            if 'choices' in json_data and len(json_data['choices']) > 0:
+                                                delta = json_data['choices'][0].get('delta', {})
+                                                if 'content' in delta:
+                                                    content = delta['content']
+                                                    full_content += content
+                                                    yield f"data: {json.dumps({'type': 'content', 'content': content}, ensure_ascii=False)}\n\n"
+                                        except json.JSONDecodeError:
+                                            logger.warning(f"无法解析流式数据: {data}")
+                                            continue
+                    else:
+                        error_msg = f"流式API请求失败，状态码: {response.status_code}"
+                        logger.error(error_msg)
+                        yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+                        
+                except Exception as e:
+                    error_msg = f"流式分析出错: {str(e)}"
+                    logger.error(error_msg)
+                    yield f"data: {json.dumps({'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+            
+            return app.response_class(
+                generate(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"流式分析请求出错: {str(e)}")
+            return jsonify({'error': f'流式分析请求出错: {str(e)}'}), 500
+            
+    except Exception as e:
+        logger.error(f"流式分析函数出错: {str(e)}")
+        import traceback
+        logger.error(f"完整错误堆栈: {traceback.format_exc()}")
+        return jsonify({'error': f'流式分析时出错: {str(e)}'}), 500
+
 @app.route('/config', methods=['GET', 'POST'])
 def handle_config():
     """处理配置的读取和更新"""
@@ -1024,6 +1370,10 @@ def handle_config():
                 config['openai']['api_url'] = data['openai_api_url']
             if 'model' in data:
                 config['openai']['model'] = data['model']
+            if 'max_tokens' in data:
+                config['openai']['max_tokens'] = int(data['max_tokens'])
+            if 'temperature' in data:
+                config['openai']['temperature'] = float(data['temperature'])
             if 'system_prompt' in data:
                 config['system_prompt'] = data['system_prompt']
             
@@ -1040,6 +1390,118 @@ def handle_config():
         except Exception as e:
             logger.error(f'更新配置时出错: {str(e)}')
             return jsonify({'error': f'更新配置时出错: {str(e)}'}), 500
+
+@app.route('/get_models', methods=['POST'])
+def get_available_models():
+    """获取可用的AI模型列表"""
+    try:
+        data = request.json
+        api_key = data.get('api_key', config['openai']['api_key'])
+        api_url = data.get('api_url', config['openai']['api_url'])
+        
+        if not api_key:
+            return jsonify({'success': False, 'error': 'API Key不能为空'})
+        
+        # 构建模型列表API端点
+        if api_url.endswith('/chat/completions'):
+            models_url = api_url.replace('/chat/completions', '/models')
+        elif api_url.endswith('/v1/chat/completions'):
+            models_url = api_url.replace('/v1/chat/completions', '/v1/models')
+        else:
+            # 如果无法确定，尝试常见的端点
+            base_url = api_url.split('/v1/')[0] if '/v1/' in api_url else api_url.split('/chat/')[0]
+            models_url = f"{base_url}/v1/models"
+        
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'User-Agent': 'OSFP-Analyzer/1.0',
+            'Accept': 'application/json'
+        }
+        
+        logger.info(f"获取模型列表，API端点: {models_url}")
+        
+        # 使用SSL优化的session
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        session = requests.Session()
+        session.verify = False
+        
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        response = session.get(
+            models_url,
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            models_data = response.json()
+            models = []
+            
+            # 解析模型列表
+            if 'data' in models_data:
+                for model in models_data['data']:
+                    model_id = model.get('id', '')
+                    if model_id and ('gpt' in model_id.lower() or 'claude' in model_id.lower() or 'o' in model_id.lower()):
+                        models.append({
+                            'id': model_id,
+                            'name': model.get('id', model_id),
+                            'type': 'chat' if 'gpt' in model_id.lower() or 'claude' in model_id.lower() else 'completion'
+                        })
+            
+            # 如果没有获取到模型，提供默认列表
+            if not models:
+                models = [
+                    {'id': 'gpt-4', 'name': 'GPT-4', 'type': 'chat'},
+                    {'id': 'gpt-4o', 'name': 'GPT-4o', 'type': 'chat'},
+                    {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini', 'type': 'chat'},
+                    {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'type': 'chat'},
+                    {'id': 'o3', 'name': 'O3 (第三方)', 'type': 'chat'},
+                    {'id': 'claude-3-opus', 'name': 'Claude 3 Opus', 'type': 'chat'},
+                    {'id': 'claude-3-sonnet', 'name': 'Claude 3 Sonnet', 'type': 'chat'}
+                ]
+            
+            logger.info(f"成功获取到 {len(models)} 个模型")
+            return jsonify({'success': True, 'models': models})
+        else:
+            logger.warning(f"获取模型列表失败，状态码: {response.status_code}")
+            # 返回默认模型列表
+            default_models = [
+                {'id': 'gpt-4', 'name': 'GPT-4', 'type': 'chat'},
+                {'id': 'gpt-4o', 'name': 'GPT-4o', 'type': 'chat'},
+                {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini', 'type': 'chat'},
+                {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'type': 'chat'},
+                {'id': 'o3', 'name': 'O3 (第三方)', 'type': 'chat'},
+                {'id': 'claude-3-opus', 'name': 'Claude 3 Opus', 'type': 'chat'},
+                {'id': 'claude-3-sonnet', 'name': 'Claude 3 Sonnet', 'type': 'chat'}
+            ]
+            return jsonify({'success': True, 'models': default_models, 'warning': '使用默认模型列表'})
+            
+    except Exception as e:
+        logger.error(f'获取模型列表时出错: {str(e)}')
+        # 返回默认模型列表
+        default_models = [
+            {'id': 'gpt-4', 'name': 'GPT-4', 'type': 'chat'},
+            {'id': 'gpt-4o', 'name': 'GPT-4o', 'type': 'chat'},
+            {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini', 'type': 'chat'},
+            {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo', 'type': 'chat'},
+            {'id': 'o3', 'name': 'O3 (第三方)', 'type': 'chat'},
+            {'id': 'claude-3-opus', 'name': 'Claude 3 Opus', 'type': 'chat'},
+            {'id': 'claude-3-sonnet', 'name': 'Claude 3 Sonnet', 'type': 'chat'}
+        ]
+        return jsonify({'success': True, 'models': default_models, 'warning': f'获取模型列表失败: {str(e)}，使用默认列表'})
 
 @app.route('/test_api_key', methods=['POST'])
 def test_api_key():
@@ -1131,6 +1593,33 @@ def download_file(filename):
         )
     except Exception as e:
         return jsonify({'error': f'下载文件时出错: {str(e)}'}), 500
+
+@app.route('/logs', methods=['GET'])
+def get_logs():
+    """获取实时日志"""
+    try:
+        # 读取最新的日志文件
+        log_file = 'debug_output/debug_log.txt'
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8') as f:
+                logs = f.read()
+            return jsonify({'success': True, 'logs': logs})
+        else:
+            return jsonify({'success': True, 'logs': '暂无日志记录'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'获取日志失败: {str(e)}'})
+
+@app.route('/clear_logs', methods=['POST'])
+def clear_logs():
+    """清空日志"""
+    try:
+        log_file = 'debug_output/debug_log.txt'
+        if os.path.exists(log_file):
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write('')
+        return jsonify({'success': True, 'message': '日志已清空'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'清空日志失败: {str(e)}'})
 
 if __name__ == '__main__':
     # 获取应用配置
